@@ -2,8 +2,10 @@ package Logger
 
 import (
 	"context"
+	"log"
 	"log/slog"
 	"os"
+	"time"
 )
 
 type Logger struct {
@@ -13,8 +15,17 @@ type Logger struct {
 	isValid     bool
 }
 
-type Event struct {
+type KeyValues struct {
+	key  string
+	value any
+}
 
+type Event struct {
+	Timestamp  int64
+	Context    context.Context
+	Level      slog.Level
+	Message    string
+	Map 	   []KeyValues
 }
 
 func NewLogger(serviceName string) *Logger {
@@ -24,7 +35,7 @@ func NewLogger(serviceName string) *Logger {
 		channel : make(chan Event, 1000),
 		isValid:     false,
 	}
-	go logger.Run()
+	go logger.run()
 	return logger
 }
 
@@ -33,8 +44,24 @@ func (L *Logger) ValidateToken(token string) error {
 }
 
 func (L *Logger) Log(level slog.Level,ctx context.Context, message string, args ...any) {
+	result := validateLogs(args...)
+	if !result {
+		log.Fatal("Invalid key-value pairs provided for logging. Keys must be strings.")
+	}
 	event := Event{
-
+		Timestamp: time.Now().Unix(),
+		Context:   ctx,
+		Level:     level,
+		Message:   message,
+	}
+	for i := 0; i < len(args); i += 2 {
+		if i+1 < len(args) {
+			key, ok := args[i].(string)
+			if !ok {
+				continue
+			}
+			event.Map = append(event.Map, KeyValues{key: key, value: args[i+1]})
+		}
 	}
 	L.channel <- event
 	L.terminal.Log(ctx,level,message,args...)
@@ -57,18 +84,28 @@ func (L *Logger) Error(ctx context.Context, message string, args ...any) {
 	L.Log(slog.LevelError, ctx, message, args...)
 }
 
-func (L *Logger) Run() {
+func (L *Logger) run() {
 	batch := make([]Event, 0, 100)
 	for {
 		event := <-L.channel
 		batch = append(batch, event)
 		if len(batch) >= 100 {
-			L.SendBatch(batch)
+			L.SendBatch(batch,L.ServiceName)
 			batch = make([]Event, 0,100)	
 		}
 	}
 }
 
-func (L *Logger) SendBatch(batch []Event) {
+func (L *Logger) SendBatch(batch []Event, serviceName string) {
 	// Implement the logic to send the batch of events to the desired destination (e.g., a logging service or database).
+}
+
+func validateLogs(args ...any) bool {
+	for i := 0; i < len(args); i += 2 {
+		_, ok := args[i].(string)
+		if !ok {
+			return false
+		}
+	}	
+	return true
 }
