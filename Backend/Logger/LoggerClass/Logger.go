@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Logger struct {
@@ -21,11 +23,11 @@ type KeyValues struct {
 }
 
 type Event struct {
-	Timestamp  int64
-	Context    context.Context
-	Level      slog.Level
-	Message    string
-	Map 	   []KeyValues
+	Timestamp   int64
+	traceID	    string
+	Level       slog.Level
+	Message     string
+	Map 	    []KeyValues
 }
 
 func NewLogger(serviceName string) *Logger {
@@ -50,7 +52,7 @@ func (L *Logger) Log(level slog.Level,ctx context.Context, message string, args 
 	}
 	event := Event{
 		Timestamp: time.Now().Unix(),
-		Context:   ctx,
+		traceID:  GetTraceID(ctx),
 		Level:     level,
 		Message:   message,
 	}
@@ -108,4 +110,14 @@ func validateLogs(args ...any) bool {
 		}
 	}	
 	return true
+}
+
+func GetTraceID(ctx context.Context) string {
+    spanContext := trace.SpanContextFromContext(ctx)
+
+    if !spanContext.IsValid() {
+        return ""
+    }
+
+    return spanContext.TraceID().String()
 }
