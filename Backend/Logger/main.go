@@ -7,7 +7,11 @@ import (
 )
 
 func main() {
-	logger := Logger.NewLogger("LogatharusService")
+	logger,_:= Logger.NewLogger("LogatharusService","your_token_here")
 	context := context.Background()
 	logger.Info(context,"Logger initialized successfully")
+	logger.Debug(context,"This is a log message from LogatharusService")
+	logger.Error(context,"This is an error log message from LogatharusService")
+	logger.Warn(context,"This is a warning log message from LogatharusService")
+
 }

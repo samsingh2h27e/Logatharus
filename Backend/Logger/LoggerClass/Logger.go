@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"net/http"
 	"os"
 	"time"
 
@@ -17,6 +18,7 @@ type Logger struct {
 	ServiceName string
 	isValid     bool
 	conn *websocket.Conn
+	token      string
 }
 
 type KeyValues struct {
@@ -32,17 +34,22 @@ type Event struct {
     Map       []KeyValues `json:"map"`
 }
 
-func NewLogger(serviceName string) *Logger {
+func NewLogger(serviceName string,token string) (*Logger , error) {
+	if err := validateToken(token); err != nil {
+		return nil,err
+	}
+	headers := make(http.Header)
+	headers.Add("Authorization", "Bearer "+ token)
 	conn, resp, err := websocket.DefaultDialer.Dial(
         "ws://localhost:8080/Logger/Logs",
-        nil,
+        headers,
     )
     if err != nil {
         fmt.Printf("WebSocket connection failed: %v\n", err)
         if resp != nil {
             fmt.Printf("HTTP status: %s\n", resp.Status)
         }
-        return nil
+        return nil,err
     }
 
     fmt.Println("WebSocket connected successfully!")
@@ -51,11 +58,13 @@ func NewLogger(serviceName string) *Logger {
 		ServiceName: serviceName,
 		isValid:     false,
 		conn: conn,
+		token: 	token,
 	}
-	return logger
+	return logger,nil
 }
 
-func (L *Logger) ValidateToken(token string) error {
+func validateToken(token string) error {
+	fmt.Println("Validating token:", token)
 	return nil
 }
 

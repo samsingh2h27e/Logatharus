@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 
@@ -8,20 +9,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type LogRequest struct {
-	ServiceName string     `json:"serviceName" binding:"required"`
-	Batch       []LogBatch `json:"batch" binding:"required"`
+type Event struct {
+    Timestamp int64      `json:"timestamp"`
+    TraceID   string     `json:"traceId"`
+    Level     slog.Level `json:"level"`
+    Message   string     `json:"message"`
+    Map       []KeyValues `json:"map"`
 }
 
-type LogBatch struct {
-	Timestamp int64      `json:"timestamp"`
-	TraceID   string     `json:"traceId"`
-	Level     string     `json:"level"`
-	Message   string     `json:"message"`
-	Map       []KeyValue `json:"map"`
-}
-
-type KeyValue struct {
+type KeyValues struct {
 	Key   string `json:"key"`
 	Value any    `json:"value"`
 }
@@ -40,7 +36,9 @@ func Log(ctx *gin.Context) {
 		return
 	}
 	defer conn.Close()
-
+	auth := ctx.GetHeader("Authorization")
+	user := getUserFromToken(auth)
+	storage := make(map[string][]Event)
 	for {
 		messageType, message, err := conn.ReadMessage()
 		if err != nil {
@@ -53,5 +51,24 @@ func Log(ctx *gin.Context) {
 			"messageType", messageType,
 			"message", string(message),
 		)
+		if _,ok := storage[user]; !ok {
+			storage[user] = []Event{}
+		}
+		storage[user] = append(storage[user], convertToStruct(message))
 	}
+}
+
+func getUserFromToken(token string) string {
+	// Placeholder for token validation logic.
+	// In a real implementation, validate the token and extract user information.
+	return "user123"
+}
+
+func convertToStruct(message []byte) Event {
+	var event Event
+	err := json.Unmarshal(message, &event)
+	if err != nil {
+		slog.Error("Failed to unmarshal message", "error", err)
+	}
+	return event
 }
