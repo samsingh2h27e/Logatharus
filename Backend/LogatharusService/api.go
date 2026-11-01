@@ -1,4 +1,4 @@
-package logatharusService
+package main
 
 import (
 	"github.com/gin-gonic/gin"
@@ -10,8 +10,11 @@ func RegisterRoutes() {
 
 	//logger class routes
 	server := gin.Default()
-	defer server.Run()
 
-	server.GET("/Logger/ValidateToken",handler.ValidateToken)
-	server.POST("/Logger/Logs",handler.Log)
+	server.GET("/Logger/ValidateToken", handler.ValidateToken)
+	server.GET("/Logger/Logs", handler.Log)
+
+	if err := server.Run(":8080"); err != nil {
+		panic(err)
+	}
 }

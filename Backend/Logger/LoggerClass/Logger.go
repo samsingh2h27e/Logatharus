@@ -2,42 +2,56 @@ package Logger
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"log/slog"
 	"os"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"go.opentelemetry.io/otel/trace"
 )
 
 type Logger struct {
 	terminal *slog.Logger
 	ServiceName string
-	channel     chan Event
 	isValid     bool
+	conn *websocket.Conn
 }
 
 type KeyValues struct {
-	key  string
-	value any
+    Key   string `json:"key"`
+    Value any    `json:"value"`
 }
 
 type Event struct {
-	Timestamp   int64
-	traceID	    string
-	Level       slog.Level
-	Message     string
-	Map 	    []KeyValues
+    Timestamp int64      `json:"timestamp"`
+    TraceID   string     `json:"traceId"`
+    Level     slog.Level `json:"level"`
+    Message   string     `json:"message"`
+    Map       []KeyValues `json:"map"`
 }
 
 func NewLogger(serviceName string) *Logger {
+	conn, resp, err := websocket.DefaultDialer.Dial(
+        "ws://localhost:8080/Logger/Logs",
+        nil,
+    )
+    if err != nil {
+        fmt.Printf("WebSocket connection failed: %v\n", err)
+        if resp != nil {
+            fmt.Printf("HTTP status: %s\n", resp.Status)
+        }
+        return nil
+    }
+
+    fmt.Println("WebSocket connected successfully!")
 	logger := &Logger{
 		terminal : slog.New(slog.NewJSONHandler(os.Stdout,nil)),
 		ServiceName: serviceName,
-		channel : make(chan Event, 1000),
 		isValid:     false,
+		conn: conn,
 	}
-	go logger.run()
 	return logger
 }
 
@@ -52,7 +66,7 @@ func (L *Logger) Log(level slog.Level,ctx context.Context, message string, args 
 	}
 	event := Event{
 		Timestamp: time.Now().Unix(),
-		traceID:  GetTraceID(ctx),
+		TraceID:  GetTraceID(ctx),
 		Level:     level,
 		Message:   message,
 	}
@@ -62,10 +76,11 @@ func (L *Logger) Log(level slog.Level,ctx context.Context, message string, args 
 			if !ok {
 				continue
 			}
-			event.Map = append(event.Map, KeyValues{key: key, value: args[i+1]})
+			event.Map = append(event.Map, KeyValues{Key: key, Value: args[i+1]})
 		}
 	}
-	L.channel <- event
+	fmt.Println("Logging event:", event)
+	L.run(event)
 	L.terminal.Log(ctx,level,message,args...)
 
 }
@@ -86,16 +101,13 @@ func (L *Logger) Error(ctx context.Context, message string, args ...any) {
 	L.Log(slog.LevelError, ctx, message, args...)
 }
 
-func (L *Logger) run() {
-	batch := make([]Event, 0, 100)
-	for {
-		event := <-L.channel
-		batch = append(batch, event)
-		if len(batch) >= 100 {
-			L.SendBatch(batch,L.ServiceName)
-			batch = make([]Event, 0,100)	
-		}
-	}
+func (L *Logger) run(event Event) {
+    if L.conn == nil {
+        return
+    }
+    if err := L.conn.WriteJSON(event); err != nil {
+        slog.Error("Failed to send log event", "error", err)
+    }
 }
 
 func (L *Logger) SendBatch(batch []Event, serviceName string) {

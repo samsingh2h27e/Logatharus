@@ -1,7 +1,11 @@
 package handler
 
 import (
+	"log/slog"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 )
 
 type LogRequest struct {
@@ -23,12 +27,31 @@ type KeyValue struct {
 }
 
 
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true // Development only; restrict origins in production.
+	},
+}
+
 func Log(ctx *gin.Context) {
-	// Implement your logging logic here
-	var requestBody LogRequest
-	err := ctx.ShouldBindBodyWithJSON(&requestBody)
+	conn, err := upgrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
-		ctx.JSON(400, gin.H{"error": "Invalid request body"})
+		slog.Error("Failed to upgrade to WebSocket", "error", err)
 		return
+	}
+	defer conn.Close()
+
+	for {
+		messageType, message, err := conn.ReadMessage()
+		if err != nil {
+			slog.Info("WebSocket connection closed", "error", err)
+			return
+		}
+
+		slog.Info(
+			"Received message",
+			"messageType", messageType,
+			"message", string(message),
+		)
 	}
 }

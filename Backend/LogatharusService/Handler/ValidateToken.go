@@ -15,5 +15,4 @@ func ValidateToken(ctx *gin.Context) {
 		ctx.JSON(400, gin.H{"error": "Invalid request body"})
 		return
 	}
-
 }
