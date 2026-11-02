@@ -11,7 +11,7 @@ func RegisterRoutes() {
 	//logger class routes
 	server := gin.Default()
 
-	server.GET("/Logger/ValidateToken", handler.ValidateToken)
+	server.POST("/Logger/ValidateToken", handler.ValidateToken)
 	server.GET("/Logger/Logs", handler.Log)
 
 	if err := server.Run(":8080"); err != nil {

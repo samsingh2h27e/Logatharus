@@ -1,7 +1,9 @@
 package Logger
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
@@ -15,7 +17,7 @@ import (
 
 type Logger struct {
 	terminal *slog.Logger
-	ServiceName string
+	serviceName string
 	isValid     bool
 	conn *websocket.Conn
 	token      string
@@ -32,6 +34,10 @@ type Event struct {
     Level     slog.Level `json:"level"`
     Message   string     `json:"message"`
     Map       []KeyValues `json:"map"`
+}
+
+type validationRequest struct {
+	token string `json:"token" binding:"required"`
 }
 
 func NewLogger(serviceName string,token string) (*Logger , error) {
@@ -55,7 +61,7 @@ func NewLogger(serviceName string,token string) (*Logger , error) {
     fmt.Println("WebSocket connected successfully!")
 	logger := &Logger{
 		terminal : slog.New(slog.NewJSONHandler(os.Stdout,nil)),
-		ServiceName: serviceName,
+		serviceName: serviceName,
 		isValid:     false,
 		conn: conn,
 		token: 	token,
@@ -65,7 +71,24 @@ func NewLogger(serviceName string,token string) (*Logger , error) {
 
 func validateToken(token string) error {
 	fmt.Println("Validating token:", token)
-	return nil
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+	reqBody := validationRequest{token: token}
+	jsonData,err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request body: %v", err)
+	}
+	res,err := client.Post("http://localhost:8080/Logger/ValidateToken", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to send request: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode == 200 {
+		return nil
+	}else {
+		return fmt.Errorf("token validation failed with status code: %d", res.StatusCode)
+	}
 }
 
 func (L *Logger) Log(level slog.Level,ctx context.Context, message string, args ...any) {
@@ -95,18 +118,30 @@ func (L *Logger) Log(level slog.Level,ctx context.Context, message string, args 
 }
 
 func (L *Logger) Debug(ctx context.Context, message string, args ...any) {
+	if !L.isValid {
+		panic("Logger is not valid. Please check the token and connection.")
+	}
 	L.Log(slog.LevelDebug, ctx, message, args...)
 }
 
 func (L *Logger) Info(ctx context.Context, message string, args ...any) {
+	if !L.isValid {
+		panic("Logger is not valid. Please check the token and connection.")
+	}
 	L.Log(slog.LevelInfo, ctx, message, args...)
 }
 
 func (L *Logger) Warn(ctx context.Context, message string, args ...any) {
+	if !L.isValid {
+		panic("Logger is not valid. Please check the token and connection.")
+	}
 	L.Log(slog.LevelWarn, ctx, message, args...)
 }
 
 func (L *Logger) Error(ctx context.Context, message string, args ...any) {
+	if !L.isValid {
+		panic("Logger is not valid. Please check the token and connection.")
+	}
 	L.Log(slog.LevelError, ctx, message, args...)
 }
 
